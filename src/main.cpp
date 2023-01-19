@@ -3,13 +3,13 @@
 #include <inttypes.h>
 
 ///< Таймаумы
-#define BRAKE_BLINK 500  ///< Период мигания диода при зажатом тормозе
+#define BRAKE_BLINK 200  ///< Период мигания диода при зажатом тормозе
 #define START_DELAY 500  ///< Время через которое автомобиль начинает крутить стартером
 #define MIN_START_TIME 600       ///< Минимальное время запуска двигателя
 #define MAX_START_TIME 3000      ///< Максимальное время время запуска двигателя
 #define WITHOUT_BRAKE_TIME 3000  ///< Время на запуск без тормоза
 #define STOP_TIME 2000  ///< Сколько времени после остановки двигателя работает режим АСС
-#define IMMO_DELAY 150  ///< Период мигания диода, при блокировки иммобилайзера
+#define IMMO_DELAY 100  ///< Период мигания диода, при блокировки иммобилайзера
 #define IMMO_TIMES 3  ///< Количество миганий диода, при блокировки иммобилайзера
 #define AFTER_START 50  ///< Какое время крутить стартером после первого сигнала запуска
 #define AFTER_STOP 1000  ///< Какое время не должно быть сигнала, чтобы считать что двигатель заглох
@@ -63,7 +63,7 @@
 #define REMOTE_PIN PIN7_bm
 
 #define setOutput(port, pin) (port.DIR |= pin);
-#define readPin(port, pin) (port.IN & pin)
+#define readPin(port, pin) ((bool)(port.IN & pin))
 #define writePin(port, pin, value) (((bool)value) ? (port.OUT |= pin) : (port.OUT &= ~pin))
 
 ///< Состояние авто
@@ -75,13 +75,13 @@
 #define CAR_STOPING 0x20   ///< Двигатель останавливается, отложеный ACC
 
 namespace car {
-uint8_t state{CAR_IGNITION};  ///< Состояние авто
-bool brake{};                 ///< Нажата педаль тормоза
-bool immo{};                  ///< Сигнализация в охране
-bool remote{};                ///< Автомобиль заводится с сигнализации
-bool remotePressed{};         ///< Сигнализация зажала кнопку
-bool park{};                  ///< Авто в режиме P
-bool parkUsed{};              ///< Проверять состояние режима P
+uint8_t state{CAR_OFF};  ///< Состояние авто
+bool brake{};            ///< Нажата педаль тормоза
+bool immo{};             ///< Сигнализация в охране
+bool remote{};           ///< Автомобиль заводится с сигнализации
+bool remotePressed{};    ///< Сигнализация зажала кнопку
+bool park{};             ///< Авто в режиме P
+bool parkUsed{};         ///< Проверять состояние режима P
 #ifdef TACHO
 ///< Счетчики для определения оборотов двигателя
 volatile uint8_t start_attempt{};
@@ -134,9 +134,9 @@ bool canStart(bool withoutBrake = false) {
 /**
  * @brief Запустить двигатель
  */
-void turnOn() {
+void turnOn(bool timeout = true) {
     setState(CAR_STARTING);
-    ticks = started ? MIN_START_TIME : MAX_START_TIME;
+    if (timeout) ticks = started ? MIN_START_TIME : MAX_START_TIME;
 }
 
 /**
@@ -189,7 +189,7 @@ void start() {
  * Чтение параметров и выставление "замка зажигания" в нужное положение
  */
 void init() {
-    brake = !readPin(BRAKE_PORT, BRAKE_PIN);
+    brake = readPin(BRAKE_PORT, BRAKE_PIN);
     immo = !readPin(IMMO_PORT, IMMO_PIN);
 #ifndef TACHO
     started = readPin(STARTED_PORT, STARTED_PIN);
@@ -216,15 +216,16 @@ void loop() {
         started = false;
         start_time = start_attempt = 0;
 #endif
-        setState(CAR_IGNITION);
+        if (isState(CAR_STARTED | CAR_STARTING)) setState(CAR_IGNITION);
     }
 
     park = readPin(PARK_PORT, PARK_PIN);
     ///< Запоминаем что был сигнал постановки на паркинг
     if (park && !parkUsed) parkUsed = true;
     immo = !readPin(IMMO_PORT, IMMO_PIN);
-    if (brake != !readPin(BRAKE_PORT, BRAKE_PIN)) {
+    if (brake != readPin(BRAKE_PORT, BRAKE_PIN)) {
         brake = !brake;
+        if (!brake && isState(CAR_STARTING)) setState(CAR_IGNITION);
         if (!(immo && isState(CAR_OFF))) {
             if (brake) {
                 blink_count = -1;
@@ -294,10 +295,13 @@ void loop() {
     if (!ticks) {
         ticks = -1;
         sticky = true;
-        if (car::canStart(true))
+        if (car::canStart()) {
+            car::turnOn(false);
+        } else if (car::canStart(true)) {
             car::turnOn();
-        else
+        } else {
             car::turnOff();
+        }
     }
     if (pressed == !readPin(BUTTON_PORT, BUTTON_PIN)) return;
     pressed = !pressed;
@@ -306,6 +310,7 @@ void loop() {
         return;
     }
     if (sticky) {
+        if (car::brake && car::isState(CAR_STARTING)) car::setState(CAR_IGNITION);
         sticky = false;
     } else {
         ticks = -1;
@@ -324,7 +329,7 @@ void init() {
     CPU_CCP |= CCP_IOREG_gc;
     CLKCTRL_MCLKCTRLB = tmp;
 
-    ///<
+    ///< Настройка выходов
     setOutput(ACC_PORT, ACC_PIN);
     setOutput(IGNITION_PORT, IGNITION_PIN);
     setOutput(STARTER_PORT, STARTER_PIN);

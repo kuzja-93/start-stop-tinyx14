@@ -20,7 +20,7 @@
 | 9          | PB0  | out | acc                |
 | 10         | PA0  | out | UPDI(*ig2)         |
 | 11         | PA1  | out | ig                 |
-| 12         | PA2  | in  | park               |
+| 12         | PA2  | in  | 1. park            |
 | 13         | PA3  | in  | button             |
 | 14         | ___  | GND | Зeмля              |
 
