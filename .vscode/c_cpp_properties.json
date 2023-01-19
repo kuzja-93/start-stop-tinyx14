@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "start-stop-tinyx14",
+            "intelliSenseMode": "${default}",
+            "compilerPath": "/usr/bin/avr-gcc",
+            "cStandard": "c11",
+            "cppStandard": "gnu++11",
+            "includePath": [
+                "/usr/avr/include/**"
+            ],
+            "browse": {
+                "path": []
+            },
+            "compilerArgs": [],
+            "configurationProvider": "ms-vscode.makefile-tools",
+            "defines": [
+                "F_CPU 20000000UL",
+                "__AVR_ATtiny414__",
+                "TACHO 1"
+            ]
+        }
+    ],
+    "version": 4
+}
